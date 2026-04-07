@@ -326,6 +326,167 @@ def greet(name, age):
             "def example():\n\tif True:\n\t\tfor i in range(10):\n\t\t\tif i > 5:\n\t\t\t\tprint(i)\n",
         ),
     ],
+    # --- 実験9: エラーハンドリングパターン ---
+    "error_handling": [
+        (
+            "bare_except",
+            """\
+def read_config(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except:
+        return {}
+""",
+        ),
+        (
+            "specific_except",
+            """\
+def read_config(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+""",
+        ),
+        (
+            "except_with_logging",
+            """\
+def read_config(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.warning("Config file not found: %s", path)
+        return {}
+    except json.JSONDecodeError as e:
+        logger.error("Invalid JSON in %s: %s", path, e)
+        return {}
+""",
+        ),
+    ],
+    # --- 実験10: クラス定義スタイル ---
+    "class_definition": [
+        (
+            "regular_class",
+            """\
+class User:
+    def __init__(self, name, email, age):
+        self.name = name
+        self.email = email
+        self.age = age
+
+    def __repr__(self):
+        return f"User({self.name!r}, {self.email!r}, {self.age!r})"
+""",
+        ),
+        (
+            "dataclass",
+            """\
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+    email: str
+    age: int
+""",
+        ),
+        (
+            "named_tuple",
+            """\
+from typing import NamedTuple
+
+class User(NamedTuple):
+    name: str
+    email: str
+    age: int
+""",
+        ),
+        (
+            "pydantic_model",
+            """\
+from pydantic import BaseModel
+
+class User(BaseModel):
+    name: str
+    email: str
+    age: int
+""",
+        ),
+    ],
+    # --- 実験11: デコレータパターン ---
+    "decorator_patterns": [
+        (
+            "no_decorator",
+            """\
+def get_users():
+    if not hasattr(get_users, '_cache'):
+        get_users._cache = db.query(User).all()
+    return get_users._cache
+""",
+        ),
+        (
+            "functools_cache",
+            """\
+from functools import cache
+
+@cache
+def get_users():
+    return db.query(User).all()
+""",
+        ),
+        (
+            "custom_decorator",
+            """\
+def retry(max_attempts=3):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception:
+                    if attempt == max_attempts - 1:
+                        raise
+        return wrapper
+    return decorator
+""",
+        ),
+    ],
+    # --- 実験12: コンテキストマネージャ ---
+    "context_manager": [
+        (
+            "try_finally",
+            """\
+def process_file(path):
+    f = open(path)
+    try:
+        data = f.read()
+        return data.strip()
+    finally:
+        f.close()
+""",
+        ),
+        (
+            "with_statement",
+            """\
+def process_file(path):
+    with open(path) as f:
+        data = f.read()
+        return data.strip()
+""",
+        ),
+        (
+            "pathlib",
+            """\
+from pathlib import Path
+
+def process_file(path):
+    return Path(path).read_text().strip()
+""",
+        ),
+    ],
 }
 
 
