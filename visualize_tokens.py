@@ -319,6 +319,128 @@ def ゲットユーザーネーム(ユーザーリスト):
 ]
 
 
+DEMO_COMPREHENSION_VS_LOOP = [
+    (
+        "List comprehension",
+        """\
+def get_even_squares(numbers):
+    return [x ** 2 for x in numbers if x % 2 == 0]
+""",
+    ),
+    (
+        "For loop",
+        """\
+def get_even_squares(numbers):
+    result = []
+    for x in numbers:
+        if x % 2 == 0:
+            result.append(x ** 2)
+    return result
+""",
+    ),
+]
+
+DEMO_STRING_FORMATTING = [
+    (
+        "f-string",
+        """\
+def greet(name, age):
+    return f"Hello, {name}! You are {age} years old."
+""",
+    ),
+    (
+        "str.format()",
+        """\
+def greet(name, age):
+    return "Hello, {}! You are {} years old.".format(name, age)
+""",
+    ),
+    (
+        "% formatting",
+        """\
+def greet(name, age):
+    return "Hello, %s! You are %d years old." % (name, age)
+""",
+    ),
+    (
+        "Concatenation",
+        """\
+def greet(name, age):
+    return "Hello, " + name + "! You are " + str(age) + " years old."
+""",
+    ),
+]
+
+DEMO_CLASS_DEFINITION = [
+    (
+        "Regular class",
+        """\
+class User:
+    def __init__(self, name, email, age):
+        self.name = name
+        self.email = email
+        self.age = age
+""",
+    ),
+    (
+        "Dataclass",
+        """\
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    name: str
+    email: str
+    age: int
+""",
+    ),
+    (
+        "NamedTuple",
+        """\
+from typing import NamedTuple
+
+class User(NamedTuple):
+    name: str
+    email: str
+    age: int
+""",
+    ),
+]
+
+DEMO_CONTEXT_MANAGER = [
+    (
+        "try/finally",
+        """\
+def process_file(path):
+    f = open(path)
+    try:
+        data = f.read()
+        return data.strip()
+    finally:
+        f.close()
+""",
+    ),
+    (
+        "with statement",
+        """\
+def process_file(path):
+    with open(path) as f:
+        data = f.read()
+        return data.strip()
+""",
+    ),
+    (
+        "pathlib",
+        """\
+from pathlib import Path
+
+def process_file(path):
+    return Path(path).read_text().strip()
+""",
+    ),
+]
+
+
 def run_all_demos() -> None:
     """全てのデモを実行する。"""
     demos = [
@@ -327,6 +449,10 @@ def run_all_demos() -> None:
         ("Type Hints", DEMO_TYPE_HINTS),
         ("Naming Convention (snake_case vs camelCase)", DEMO_NAMING_CONVENTION),
         ("Japanese vs English Identifiers", DEMO_JAPANESE_VS_ENGLISH),
+        ("Comprehension vs Loop", DEMO_COMPREHENSION_VS_LOOP),
+        ("String Formatting", DEMO_STRING_FORMATTING),
+        ("Class Definition Style", DEMO_CLASS_DEFINITION),
+        ("Context Manager", DEMO_CONTEXT_MANAGER),
     ]
 
     for title, snippets in demos:
@@ -344,7 +470,10 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--demo",
-        choices=["variables", "comments", "types", "naming", "japanese", "all"],
+        choices=[
+            "variables", "comments", "types", "naming", "japanese",
+            "comprehension", "formatting", "class", "context", "all",
+        ],
         default="all",
         help="Which demo to run (default: all)",
     )
@@ -376,6 +505,10 @@ if __name__ == "__main__":
             "types": [("Type Hints", DEMO_TYPE_HINTS)],
             "naming": [("Naming Convention", DEMO_NAMING_CONVENTION)],
             "japanese": [("Japanese vs English", DEMO_JAPANESE_VS_ENGLISH)],
+            "comprehension": [("Comprehension vs Loop", DEMO_COMPREHENSION_VS_LOOP)],
+            "formatting": [("String Formatting", DEMO_STRING_FORMATTING)],
+            "class": [("Class Definition Style", DEMO_CLASS_DEFINITION)],
+            "context": [("Context Manager", DEMO_CONTEXT_MANAGER)],
         }
 
         if args.demo == "all":
