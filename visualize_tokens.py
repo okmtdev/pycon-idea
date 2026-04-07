@@ -5,6 +5,8 @@ tiktokenを使用して、Pythonコードがどのようにトークン化され
 色分け表示し、トークン数を分析します。
 """
 
+from pathlib import Path
+
 import tiktoken
 from rich.console import Console
 from rich.table import Table
@@ -181,6 +183,239 @@ def analyze_token_breakdown(code: str, encoding_name: str = "o200k_base") -> Non
 
     console.print(f"\n[bold]Total tokens: {total}[/bold]")
     console.print(table)
+
+
+# ============================================================
+# グラフィカル可視化（-G / --graph オプション）
+# ============================================================
+
+# matplotlib用のカラーパレット（トークン色分け用）
+MPL_COLORS = [
+    "#E74C3C", "#2ECC71", "#3498DB", "#F39C12", "#9B59B6", "#1ABC9C",
+    "#E67E22", "#27AE60", "#2980B9", "#F1C40F", "#8E44AD", "#16A085",
+    "#D35400", "#C0392B", "#7F8C8D", "#2C3E50", "#E84393", "#00CEC9",
+]
+
+
+def plot_token_comparison(
+    snippets: list[tuple[str, str]],
+    encoding_name: str = "o200k_base",
+    output_path: str = "token_comparison.png",
+    title: str = "Token Count Comparison",
+) -> None:
+    """スニペットのトークン数比較を棒グラフとして保存する。"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    encoding = tiktoken.get_encoding(encoding_name)
+
+    labels = []
+    counts = []
+    for label, code in snippets:
+        token_ids = tokenize(code, encoding)
+        labels.append(label)
+        counts.append(len(token_ids))
+
+    min_count = min(counts)
+    bar_colors = ["#2ECC71" if c == min_count else "#3498DB" for c in counts]
+
+    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.5), 5))
+    bars = ax.bar(range(len(labels)), counts, color=bar_colors, edgecolor="white", linewidth=0.5)
+
+    for bar, count in zip(bars, counts):
+        ratio = count / min_count
+        label_text = f"{count}"
+        if ratio > 1.0:
+            label_text += f"\n({ratio:.2f}x)"
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + max(counts) * 0.02,
+            label_text,
+            ha="center", va="bottom", fontweight="bold", fontsize=10,
+        )
+
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=25, ha="right", fontsize=10)
+    ax.set_ylabel("Token Count", fontsize=12)
+    ax.set_title(f"{title} ({encoding_name})", fontsize=14, fontweight="bold")
+    ax.set_ylim(0, max(counts) * 1.25)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    console.print(f"[green]Saved:[/green] {output_path}")
+
+
+def plot_token_breakdown_pie(
+    code: str,
+    encoding_name: str = "o200k_base",
+    output_path: str = "token_breakdown.png",
+    title: str = "Token Breakdown",
+) -> None:
+    """トークンカテゴリの内訳を円グラフとして保存する。"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    encoding = tiktoken.get_encoding(encoding_name)
+    token_ids = tokenize(code, encoding)
+    token_strings = decode_tokens(token_ids, encoding)
+
+    python_keywords = {
+        "def", "class", "import", "from", "return", "if", "else", "elif",
+        "for", "while", "try", "except", "finally", "with", "as", "yield",
+        "lambda", "pass", "break", "continue", "and", "or", "not", "in",
+        "is", "None", "True", "False", "async", "await",
+    }
+    operators = {"=", "+", "-", "*", "/", ":", "(", ")", "[", "]", "{", "}", ",", "."}
+
+    categories = {"keywords": 0, "identifiers": 0, "operators": 0, "whitespace": 0, "strings": 0, "other": 0}
+
+    for token_str in token_strings:
+        stripped = token_str.strip()
+        if stripped in python_keywords:
+            categories["keywords"] += 1
+        elif stripped in operators or all(c in "=+-*/<>!&|^~%" for c in stripped if c):
+            categories["operators"] += 1
+        elif token_str.isspace() or token_str in ("\n", "\t", "    "):
+            categories["whitespace"] += 1
+        elif stripped.startswith(("'", '"')) or stripped.startswith(("#",)):
+            categories["strings"] += 1
+        elif stripped.isidentifier():
+            categories["identifiers"] += 1
+        else:
+            categories["other"] += 1
+
+    # ゼロのカテゴリを除外
+    filtered = {k: v for k, v in categories.items() if v > 0}
+    pie_colors = ["#E74C3C", "#2ECC71", "#3498DB", "#95A5A6", "#F39C12", "#9B59B6"]
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    wedges, texts, autotexts = ax.pie(
+        filtered.values(),
+        labels=filtered.keys(),
+        colors=pie_colors[:len(filtered)],
+        autopct=lambda pct: f"{pct:.1f}%\n({int(round(pct / 100 * len(token_ids)))})",
+        startangle=90,
+        textprops={"fontsize": 11},
+    )
+    for autotext in autotexts:
+        autotext.set_fontsize(9)
+        autotext.set_fontweight("bold")
+    ax.set_title(f"{title} (total: {len(token_ids)} tokens, {encoding_name})", fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    console.print(f"[green]Saved:[/green] {output_path}")
+
+
+def plot_token_heatmap(
+    code: str,
+    encoding_name: str = "o200k_base",
+    output_path: str = "token_heatmap.png",
+    title: str = "Token Boundaries",
+) -> None:
+    """コードをトークン境界で色分けした画像を保存する。"""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+
+    encoding = tiktoken.get_encoding(encoding_name)
+    token_ids = tokenize(code, encoding)
+    token_strings = decode_tokens(token_ids, encoding)
+
+    # テキストを行ごとに処理
+    lines: list[list[tuple[str, str]]] = [[]]  # (text, color) のリスト
+    for i, token_str in enumerate(token_strings):
+        color = MPL_COLORS[i % len(MPL_COLORS)]
+        parts = token_str.split("\n")
+        for j, part in enumerate(parts):
+            if j > 0:
+                lines.append([])
+            if part:
+                lines[-1].append((part, color))
+
+    char_width = 0.55
+    line_height = 1.4
+    fig_width = max(12, max((sum(len(t) for t, _ in line) for line in lines), default=40) * char_width * 0.14 + 1)
+    fig_height = max(3, len(lines) * line_height * 0.14 + 1.5)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.set_xlim(0, fig_width / 0.14)
+    ax.set_ylim(-len(lines) * line_height - 0.5, 1.5)
+    ax.axis("off")
+
+    ax.text(0, 1.0, f"{title} ({len(token_ids)} tokens, {encoding_name})",
+            fontsize=13, fontweight="bold", fontfamily="monospace",
+            transform=ax.transAxes, va="bottom")
+
+    for row_idx, line_tokens in enumerate(lines):
+        x = 0.5
+        y = -row_idx * line_height
+        for text, color in line_tokens:
+            w = len(text) * char_width
+            rect = patches.FancyBboxPatch(
+                (x - 0.1, y - 0.5), w + 0.15, line_height * 0.85,
+                boxstyle="round,pad=0.05", facecolor=color, alpha=0.25,
+                edgecolor=color, linewidth=1.2,
+            )
+            ax.add_patch(rect)
+            display = text.replace("\t", "→")
+            ax.text(x, y, display, fontsize=10, fontfamily="monospace",
+                    va="center", color="#2C3E50")
+            x += w + 0.3
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    console.print(f"[green]Saved:[/green] {output_path}")
+
+
+def run_graph_demos(
+    demo_key: str,
+    encoding_name: str = "o200k_base",
+    output_dir: str = "figures",
+) -> None:
+    """デモスニペットのグラフを生成する。"""
+    Path(output_dir).mkdir(exist_ok=True)
+
+    demo_map = {
+        "variables": ("Variable Name Length", DEMO_VARIABLE_NAMES),
+        "comments": ("Comment Style", DEMO_COMMENTS),
+        "types": ("Type Hints", DEMO_TYPE_HINTS),
+        "naming": ("Naming Convention", DEMO_NAMING_CONVENTION),
+        "japanese": ("Japanese vs English", DEMO_JAPANESE_VS_ENGLISH),
+        "comprehension": ("Comprehension vs Loop", DEMO_COMPREHENSION_VS_LOOP),
+        "formatting": ("String Formatting", DEMO_STRING_FORMATTING),
+        "class": ("Class Definition Style", DEMO_CLASS_DEFINITION),
+        "context": ("Context Manager", DEMO_CONTEXT_MANAGER),
+    }
+
+    if demo_key == "all":
+        targets = list(demo_map.items())
+    else:
+        targets = [(demo_key, demo_map[demo_key])]
+
+    for key, (title, snippets) in targets:
+        # 比較棒グラフ
+        plot_token_comparison(
+            snippets,
+            encoding_name=encoding_name,
+            output_path=f"{output_dir}/{key}_comparison.png",
+            title=title,
+        )
+        # 最初のスニペットのヒートマップ（代表例）
+        plot_token_heatmap(
+            snippets[0][1],
+            encoding_name=encoding_name,
+            output_path=f"{output_dir}/{key}_heatmap.png",
+            title=f"{title}: {snippets[0][0]}",
+        )
+
+    console.print(f"\n[bold green]All graphs saved to {output_dir}/[/bold green]")
 
 
 # --- デモ用コードスニペット ---
@@ -488,16 +723,45 @@ if __name__ == "__main__":
         default="o200k_base",
         help="Encoding to use (default: o200k_base)",
     )
+    parser.add_argument(
+        "-G", "--graph",
+        action="store_true",
+        help="Generate graphical visualizations (PNG) instead of terminal output",
+    )
+    parser.add_argument(
+        "--graph-dir",
+        type=str,
+        default="figures",
+        help="Directory to save graph images (default: figures)",
+    )
 
     args = parser.parse_args()
 
     if args.file:
         with open(args.file) as f:
             code = f.read()
-        encoding = tiktoken.get_encoding(args.encoding)
-        visualize_tokens(code, encoding, label=args.file)
-        console.print()
-        analyze_token_breakdown(code, args.encoding)
+        if args.graph:
+            Path(args.graph_dir).mkdir(exist_ok=True)
+            stem = Path(args.file).stem
+            plot_token_heatmap(
+                code,
+                encoding_name=args.encoding,
+                output_path=f"{args.graph_dir}/{stem}_heatmap.png",
+                title=Path(args.file).name,
+            )
+            plot_token_breakdown_pie(
+                code,
+                encoding_name=args.encoding,
+                output_path=f"{args.graph_dir}/{stem}_breakdown.png",
+                title=Path(args.file).name,
+            )
+        else:
+            encoding = tiktoken.get_encoding(args.encoding)
+            visualize_tokens(code, encoding, label=args.file)
+            console.print()
+            analyze_token_breakdown(code, args.encoding)
+    elif args.graph:
+        run_graph_demos(args.demo, args.encoding, args.graph_dir)
     else:
         demo_map = {
             "variables": [("Variable Name Length", DEMO_VARIABLE_NAMES)],
