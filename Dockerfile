@@ -4,10 +4,9 @@ WORKDIR /app
 
 # 依存関係のインストール（キャッシュ効率のためpyproject.tomlを先にコピー）
 COPY pyproject.toml ./
-RUN uv sync --no-install-project
+RUN uv sync
 
 # アプリケーションコードをコピー
 COPY . .
-RUN uv sync
 
 CMD ["uv", "run", "python", "experiments.py"]
